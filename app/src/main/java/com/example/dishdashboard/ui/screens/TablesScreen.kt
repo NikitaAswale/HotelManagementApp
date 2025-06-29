@@ -1,13 +1,17 @@
 package com.example.dishdashboard.ui.screens
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,12 +27,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.dishdashboard.ui.theme.*
 
 data class Table(
     val id: Int,
     val capacity: Int,
-    val status: TableStatus = TableStatus.AVAILABLE,
+    var status: TableStatus = TableStatus.AVAILABLE,
     val currentOccupancy: Int = 0,
     val reservationTime: String? = null,
     val customerName: String? = null
@@ -41,339 +46,150 @@ enum class TableStatus(val color: Color, val icon: @Composable () -> Unit, val l
     CLEANING(ModernBlue, { Icon(Icons.Default.CleaningServices, "Cleaning") }, "Cleaning")
 }
 
-enum class TableFilter(val icon: @Composable () -> Unit, val label: String) {
-    ALL({ Icon(Icons.Default.ViewModule, "All") }, "All Tables"),
-    AVAILABLE({ Icon(Icons.Default.CheckCircle, "Available") }, "Available"),
-    OCCUPIED({ Icon(Icons.Default.Person, "Occupied") }, "Occupied"),
-    RESERVED({ Icon(Icons.Default.Schedule, "Reserved") }, "Reserved"),
-    CLEANING({ Icon(Icons.Default.CleaningServices, "Cleaning") }, "Cleaning")
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TablesScreen(onNavigateBack: () -> Unit) {
-    var selectedFilter by remember { mutableStateOf(TableFilter.ALL) }
-    var searchQuery by remember { mutableStateOf("") }
+    var tables by remember { mutableStateOf(getMockTables()) }
+    var selectedFilter by remember { mutableStateOf<TableStatus?>(null) }
+    var isVisible by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
-                        MaterialTheme.colorScheme.surface,
-                        MaterialTheme.colorScheme.surfaceVariant
-                    ),
-                    startY = 0f,
-                    endY = Float.POSITIVE_INFINITY
-                )
-            )
-    ) {
-        // Title section with seamless gradient
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 24.dp)
-        ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+    LaunchedEffect(Unit) {
+        isVisible = true
+    }
+
+    val filteredTables = remember(selectedFilter, tables) {
+        if (selectedFilter == null) {
+            tables
+        } else {
+            tables.filter { it.status == selectedFilter }
+        }
+    }
+
+    Scaffold(
+        floatingActionButton = {
+            AnimatedVisibility(
+                visible = isVisible,
+                enter = slideInHorizontally(initialOffsetX = { 200 }) + fadeIn()
+            ) {
+                FloatingActionButton(
+                    onClick = { /* TODO: Add new table */ },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    shape = CircleShape
                 ) {
-                    Column {
-                        Text(
-                            text = "Tables",
-                            style = MaterialTheme.typography.headlineLarge.copy(
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Manage Restaurant Tables",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f)
-                        )
-                    }
-                    Row {
-                        IconButton(onClick = { /* TODO: Add filter */ }) {
-                            Icon(
-                                Icons.Default.FilterList,
-                                contentDescription = "Filter",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        IconButton(onClick = onNavigateBack) {
-                            Icon(
-                                Icons.Default.ArrowBack,
-                                contentDescription = "Back",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+                    Icon(Icons.Default.Add, "Add Table")
                 }
             }
         }
-
-        // Modern Filter Chips
-        LazyRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(TableFilter.values()) { filter ->
-                FilterChip(
-                    selected = selectedFilter == filter,
-                    onClick = { selectedFilter = filter },
-                    label = {
-                        Text(
-                            text = filter.label,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = if (selectedFilter == filter) FontWeight.Bold else FontWeight.Normal
-                        )
-                    },
-                    leadingIcon = filter.icon,
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    ),
-                    border = FilterChipDefaults.filterChipBorder(
-                        borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                        selectedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        borderWidth = 1.dp
-                    )
-                )
-            }
-        }
-
-        // Tables Grid
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 300.dp),
-            contentPadding = PaddingValues(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            items(tables.filter {
-                when (selectedFilter) {
-                    TableFilter.ALL -> true
-                    TableFilter.AVAILABLE -> it.status == TableStatus.AVAILABLE
-                    TableFilter.OCCUPIED -> it.status == TableStatus.OCCUPIED
-                    TableFilter.RESERVED -> it.status == TableStatus.RESERVED
-                    TableFilter.CLEANING -> it.status == TableStatus.CLEANING
-                }
-            }) { table ->
-                TableCard(table)
-            }
-        }
-    }
-
-    // Floating Action Button
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.BottomEnd
-    ) {
-        FloatingActionButton(
-            onClick = { /* TODO: Add table */ },
-            modifier = Modifier
-                .padding(16.dp)
-                .shadow(
-                    elevation = 6.dp,
-                    shape = CircleShape,
-                    spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
-                ),
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary
-        ) {
-            Icon(Icons.Default.Add, "Add Table")
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun TableCard(table: Table) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Card(
-        onClick = { expanded = !expanded },
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize()
-            .shadow(
-                elevation = if (expanded) 8.dp else 4.dp,
-                shape = RoundedCornerShape(16.dp),
-                spotColor = table.status.color.copy(alpha = 0.25f),
-                ambientColor = table.status.color.copy(alpha = 0.1f)
-            ),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (expanded) 8.dp else 4.dp,
-            pressedElevation = 12.dp,
-            focusedElevation = 8.dp,
-            hoveredElevation = 6.dp
-        )
-    ) {
+    ) { paddingValues ->
         Column(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
+                .padding(paddingValues)
                 .background(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            table.status.color.copy(alpha = 0.1f),
-                            MaterialTheme.colorScheme.surface
-                        )
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
+                            MaterialTheme.colorScheme.surface,
+                            MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                        startY = 0f,
+                        endY = 1000f
                     )
                 )
-                .padding(16.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // Header
+            AnimatedVisibility(
+                visible = isVisible,
+                enter = slideInVertically(initialOffsetY = { -100 }) + fadeIn()
             ) {
-                // Table Number and Capacity
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "Table ${table.id}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
+                Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 32.dp, bottom = 16.dp)) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            Icons.Default.Person,
-                            "Capacity",
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        Column {
+                            Text(
+                                "Table Management",
+                                style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                "Oversee your restaurant's floor.",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(Icons.Default.ArrowBack, "Back", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TableStatusSummary(tables)
+                }
+            }
+
+            // Filter Chips
+            AnimatedVisibility(
+                visible = isVisible,
+                enter = slideInVertically(initialOffsetY = { 100 }, animationSpec = tween(500, delayMillis = 100)) + fadeIn(animationSpec = tween(500, delayMillis = 100))
+            ) {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item {
+                        FilterChip(
+                            selected = selectedFilter == null,
+                            onClick = { selectedFilter = null },
+                            label = { Text("All (${tables.size})") },
+                            leadingIcon = { Icon(Icons.Default.TableRestaurant, null) }
                         )
-                        Text(
-                            "${table.currentOccupancy}/${table.capacity} seats",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    }
+                    items(TableStatus.values()) { status ->
+                        FilterChip(
+                            selected = selectedFilter == status,
+                            onClick = { selectedFilter = status },
+                            label = { Text("${status.label} (${tables.count { it.status == status }})") },
+                            leadingIcon = { status.icon() },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = status.color.copy(alpha = 0.15f),
+                                selectedLabelColor = status.color
+                            )
                         )
                     }
                 }
-
-                // Status Indicator
-                TableStatusChip(table.status)
             }
 
-            if (expanded) {
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                Divider(
-                    modifier = Modifier.padding(vertical = 8.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                )
-
-                // Additional Information
-                when (table.status) {
-                    TableStatus.RESERVED -> {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+            // Tables Grid
+            AnimatedVisibility(
+                visible = isVisible,
+                enter = fadeIn(animationSpec = tween(500, delayMillis = 200))
+            ) {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(160.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    itemsIndexed(filteredTables, key = { _, table -> table.id }) { index, table ->
+                        AnimatedVisibility(
+                            visible = true,
+                            enter = slideInHorizontally(initialOffsetX = { 200 }, animationSpec = tween(500, delayMillis = 50 * index)) + fadeIn(animationSpec = tween(500, delayMillis = 50 * index))
                         ) {
-                            Column {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Person,
-                                        "Customer",
-                                        modifier = Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                    )
-                                    Text(
-                                        table.customerName ?: "",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Schedule,
-                                        "Time",
-                                        modifier = Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                    )
-                                    Text(
-                                        table.reservationTime ?: "",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                                    )
-                                }
-                            }
-
-                            // Quick Actions
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                IconButton(
-                                    onClick = { /* TODO: Edit reservation */ },
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
-                                ) {
-                                    Icon(
-                                        Icons.Default.Edit,
-                                        "Edit",
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                                IconButton(
-                                    onClick = { /* TODO: Cancel reservation */ },
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.1f))
-                                ) {
-                                    Icon(
-                                        Icons.Default.Close,
-                                        "Cancel",
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
+                            TableCard(table) { newStatus ->
+                                val indexToUpdate = tables.indexOfFirst { it.id == table.id }
+                                if (indexToUpdate != -1) {
+                                    tables = tables.toMutableList().also {
+                                        it[indexToUpdate] = table.copy(status = newStatus)
+                                    }
                                 }
                             }
                         }
                     }
-                    TableStatus.OCCUPIED -> {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "Current Order: #${1000 + table.id}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                            )
-                            Button(
-                                onClick = { /* TODO: View Order */ },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
-                                )
-                            ) {
-                                Text("View Order")
-                            }
-                        }
-                    }
-                    else -> {}
                 }
             }
         }
@@ -381,39 +197,149 @@ fun TableCard(table: Table) {
 }
 
 @Composable
-fun TableStatusChip(status: TableStatus) {
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = status.color.copy(alpha = 0.1f),
-        border = BorderStroke(
-            width = 1.dp,
-            color = status.color.copy(alpha = 0.5f)
-        )
+fun TableStatusSummary(tables: List<Table>) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceAround
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            CompositionLocalProvider(LocalContentColor provides status.color) {
-                status.icon()
+        TableStatus.values().forEach { status ->
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = tables.count { it.status == status }.toString(),
+                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                    color = status.color
+                )
                 Text(
                     text = status.label,
                     style = MaterialTheme.typography.bodySmall,
-                    color = status.color
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
     }
 }
 
-val tables = listOf(
-    Table(1, 2, TableStatus.AVAILABLE),
-    Table(2, 4, TableStatus.OCCUPIED, 3),
-    Table(3, 6, TableStatus.RESERVED, reservationTime = "19:30", customerName = "Rahul Sharma"),
-    Table(4, 2, TableStatus.CLEANING),
-    Table(5, 8, TableStatus.AVAILABLE),
-    Table(6, 4, TableStatus.OCCUPIED, 4),
-    Table(7, 2, TableStatus.RESERVED, reservationTime = "20:00", customerName = "Priya Patel"),
-    Table(8, 6, TableStatus.AVAILABLE)
-)
+@Composable
+fun TableCard(table: Table, onStatusChange: (TableStatus) -> Unit) {
+    var showStatusMenu by remember { mutableStateOf(false) }
+
+    Box(
+        contentAlignment = Alignment.BottomCenter,
+        modifier = Modifier
+            .aspectRatio(1f)
+            .clickable { showStatusMenu = true }
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 16.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(2.dp, table.status.color.copy(alpha = 0.5f)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                // Background blur effect
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    table.status.color.copy(alpha = 0.1f),
+                                    Color.Transparent
+                                ),
+                                radius = 150f
+                            )
+                        )
+                )
+
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        "Table",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = table.id.toString(),
+                        style = MaterialTheme.typography.displayMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 48.sp,
+                            color = table.status.color
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.People,
+                            contentDescription = "Capacity",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            "${table.capacity} Seats",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        // Status Badge
+        Surface(
+            modifier = Modifier.shadow(elevation = 6.dp, shape = RoundedCornerShape(12.dp)),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(2.dp, table.status.color)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                table.status.icon()
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    table.status.label,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = table.status.color
+                )
+            }
+        }
+
+        // Status change dropdown
+        DropdownMenu(
+            expanded = showStatusMenu,
+            onDismissRequest = { showStatusMenu = false }
+        ) {
+            TableStatus.values().forEach { status ->
+                DropdownMenuItem(
+                    text = { Text(status.label) },
+                    onClick = {
+                        onStatusChange(status)
+                        showStatusMenu = false
+                    },
+                    leadingIcon = { status.icon() }
+                )
+            }
+        }
+    }
+}
+
+fun getMockTables(): List<Table> {
+    return List(20) {
+        Table(
+            id = it + 1,
+            capacity = if (it % 3 == 0) 6 else if (it % 2 == 0) 4 else 2,
+            status = TableStatus.values().random()
+        )
+    }
+}
