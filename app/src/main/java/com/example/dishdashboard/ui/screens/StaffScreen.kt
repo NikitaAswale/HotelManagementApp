@@ -1,39 +1,68 @@
 package com.example.dishdashboard.ui.screens
 
 import androidx.compose.animation.*
-import androidx.compose.foundation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.dishdashboard.R
 import com.example.dishdashboard.ui.components.ModernSearchBar
 import com.example.dishdashboard.ui.theme.*
+import java.text.NumberFormat
+import java.util.*
+
+enum class StaffStatus(val displayName: String, val color: Color) {
+    ACTIVE("Active", ReportsColor),
+    OFF_DUTY("Off-duty", ModernOrange),
+    ON_LEAVE("On Leave", ModernRed),
+    TRAINING("Training", ModernBlue)
+}
+
+enum class StaffRole(val displayName: String, val icon: ImageVector) {
+    CHEF("Chef", Icons.Default.RestaurantMenu),
+    SERVER("Server", Icons.Default.RoomService),
+    BARTENDER("Bartender", Icons.Default.LocalBar),
+    HOST("Host", Icons.Default.People),
+    KITCHEN_STAFF("Kitchen Staff", Icons.Default.Kitchen),
+    MANAGER("Manager", Icons.Default.SupervisorAccount),
+    ALL("All Roles", Icons.Default.Work)
+}
 
 data class StaffMember(
     val id: Int,
     val name: String,
-    val role: String,
-    val status: String,
+    val role: StaffRole,
+    val status: StaffStatus,
     val shift: String,
     val phone: String,
-    val email: String
+    val email: String,
+    val joinDate: String,
+    val rating: Double
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,145 +70,162 @@ data class StaffMember(
 fun StaffScreen(
     onNavigateBack: () -> Unit
 ) {
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedRole by remember { mutableStateOf(StaffRole.ALL) }
     var showAddStaffDialog by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+    var isVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        isVisible = true
+    }
 
     // Mock data
     val staffList = remember {
         listOf(
-            StaffMember(1, "Rajesh Kumar", "Chef", "Active", "Morning", "+91 98765 43210", "rajesh@email.com"),
-            StaffMember(2, "Priya Sharma", "Server", "Active", "Evening", "+91 98765 43211", "priya@email.com"),
-            StaffMember(3, "Amit Patel", "Bartender", "Off-duty", "Night", "+91 98765 43212", "amit@email.com"),
-            StaffMember(4, "Neha Gupta", "Host", "Active", "Morning", "+91 98765 43213", "neha@email.com"),
-            StaffMember(5, "Suresh Verma", "Kitchen Staff", "On Leave", "Evening", "+91 98765 43214", "suresh@email.com")
+            StaffMember(1, "Rajesh Kumar", StaffRole.CHEF, StaffStatus.ACTIVE, "Morning", "+91 98765 43210", "rajesh@email.com", "2022-01-15", 4.8),
+            StaffMember(2, "Priya Sharma", StaffRole.SERVER, StaffStatus.ACTIVE, "Evening", "+91 98765 43211", "priya@email.com", "2022-03-10", 4.5),
+            StaffMember(3, "Amit Patel", StaffRole.BARTENDER, StaffStatus.OFF_DUTY, "Night", "+91 98765 43212", "amit@email.com", "2023-05-20", 4.2),
+            StaffMember(4, "Neha Gupta", StaffRole.HOST, StaffStatus.ACTIVE, "Morning", "+91 98765 43213", "neha@email.com", "2023-02-18", 4.6),
+            StaffMember(5, "Suresh Verma", StaffRole.KITCHEN_STAFF, StaffStatus.ON_LEAVE, "Evening", "+91 98765 43214", "suresh@email.com", "2022-08-01", 4.0),
+            StaffMember(6, "Sunita Devi", StaffRole.MANAGER, StaffStatus.ACTIVE, "Day", "+91 98765 43215", "sunita@email.com", "2021-11-25", 4.9),
+            StaffMember(7, "Vikram Singh", StaffRole.SERVER, StaffStatus.TRAINING, "Night", "+91 98765 43216", "vikram@email.com", "2024-01-10", 3.8)
         )
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
-                        MaterialTheme.colorScheme.surface,
-                        MaterialTheme.colorScheme.surfaceVariant
-                    ),
-                    startY = 0f,
-                    endY = Float.POSITIVE_INFINITY
+    val filteredStaff = remember(searchQuery, selectedRole) {
+        staffList.filter { member ->
+            val matchesSearch = searchQuery.isEmpty() ||
+                    member.name.contains(searchQuery, ignoreCase = true) ||
+                    member.email.contains(searchQuery, ignoreCase = true) ||
+                    member.phone.contains(searchQuery, ignoreCase = true)
+
+            val matchesRole = selectedRole == StaffRole.ALL || member.role == selectedRole
+
+            matchesSearch && matchesRole
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        "Staff Management",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { /*TODO: Filter*/ }) {
+                        Icon(Icons.Default.FilterList, contentDescription = "Filter")
+                    }
+                    IconButton(onClick = { showAddStaffDialog = true }) {
+                        Icon(Icons.Default.PersonAdd, contentDescription = "Add Staff")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent
                 )
             )
-    ) {
-        // Title section with seamless gradient
+        }
+    ) { paddingValues ->
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 24.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text(
-                            text = "Staff Management",
-                            style = MaterialTheme.typography.headlineMedium.copy(
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Manage Your Restaurant Team",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                IconButton(
-                    onClick = { showAddStaffDialog = true },
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PersonAdd,
-                        contentDescription = "Add Staff",
-                        tint = MaterialTheme.colorScheme.primary
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            StaffColor.copy(alpha = 0.1f),
+                            MaterialTheme.colorScheme.surface,
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        ),
+                        startY = 0f,
+                        endY = 1200f
                     )
-                }
-            }
-        }
-
-        // Search Bar
-        ModernSearchBar(
-            query = searchQuery,
-            onQueryChange = { searchQuery = it },
-            placeholder = "Search staff members..."
-        )
-
-        // Stats Cards with modern design
-        StaffStats(staffList)
-
-        // Modern Tab Row
-        ScrollableTabRow(
-            selectedTabIndex = selectedTab,
-            edgePadding = 16.dp,
-            containerColor = Color.Transparent,
-            contentColor = MaterialTheme.colorScheme.primary,
-            indicator = { tabPositions ->
-                TabRowDefaults.Indicator(
-                    modifier = Modifier
-                        .tabIndicatorOffset(tabPositions[selectedTab])
-                        .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp)),
-                    height = 3.dp,
-                    color = MaterialTheme.colorScheme.primary
                 )
-            }
         ) {
-            listOf("All Staff", "Active", "Off-duty", "On Leave").forEachIndexed { index, title ->
-                Tab(
-                    selected = selectedTab == index,
-                    onClick = { selectedTab = index },
-                    text = {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(bottom = 16.dp)
+            ) {
+                // Summary Cards
+                item {
+                    AnimatedVisibility(
+                        visible = isVisible,
+                        enter = slideInVertically(
+                            initialOffsetY = { -100 },
+                            animationSpec = tween(600, easing = EaseOutBounce)
+                        ) + fadeIn(animationSpec = tween(600))
+                    ) {
+                        StaffSummary(staffList)
+                    }
+                }
+
+                // Search Bar
+                item {
+                    AnimatedVisibility(
+                        visible = isVisible,
+                        enter = slideInVertically(
+                            initialOffsetY = { -50 },
+                            animationSpec = tween(800, delayMillis = 200)
+                        ) + fadeIn(animationSpec = tween(800, delayMillis = 200))
+                    ) {
+                        ModernSearchBar(
+                            query = searchQuery,
+                            onQueryChange = { searchQuery = it },
+                            placeholder = "Search staff by name, role, email..."
+                        )
+                    }
+                }
+
+                // Role Filters
+                item {
+                    AnimatedVisibility(
+                        visible = isVisible,
+                        enter = slideInHorizontally(
+                            initialOffsetX = { -200 },
+                            animationSpec = tween(800, delayMillis = 400)
+                        ) + fadeIn(animationSpec = tween(800, delayMillis = 400))
+                    ) {
+                        RoleFilterChips(
+                            selectedRole = selectedRole,
+                            onRoleSelected = { selectedRole = it }
+                        )
+                    }
+                }
+
+                // Staff List Header
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = title,
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
+                            text = "${filteredStaff.size} Members Found",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold
                             )
                         )
-                    },
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp)
-                )
-            }
-        }
-
-        // Staff List with modern cards
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(staffList.filter {
-                when (selectedTab) {
-                    1 -> it.status == "Active"
-                    2 -> it.status == "Off-duty"
-                    3 -> it.status == "On Leave"
-                    else -> true
+                        IconButton(onClick = { /*TODO: Sort*/ }) {
+                            Icon(Icons.Default.Sort, contentDescription = "Sort Staff")
+                        }
+                    }
                 }
-            }) { staff ->
-                StaffCard(staff)
+
+                // Staff List
+                items(filteredStaff) { staff ->
+                    StaffMemberCard(staff = staff, modifier = Modifier.padding(horizontal = 16.dp))
+                }
             }
         }
     }
@@ -190,253 +236,210 @@ fun StaffScreen(
 }
 
 @Composable
-fun StaffStats(staffList: List<StaffMember>) {
+fun StaffSummary(staffList: List<StaffMember>) {
+    val totalStaff = staffList.size
+    val activeStaff = staffList.count { it.status == StaffStatus.ACTIVE }
+    val averageRating = staffList.map { it.rating }.average()
+
     LazyRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp)
     ) {
         item {
-            StatCard(
+            SummaryCard(
                 title = "Total Staff",
-                value = staffList.size.toString(),
-                icon = Icons.Default.People,
-                color = ModernBlue
+                value = totalStaff.toString(),
+                icon = Icons.Default.Groups,
+                color = StaffColor
             )
         }
         item {
-            StatCard(
-                title = "Active Now",
-                value = staffList.count { it.status == "Active" }.toString(),
+            SummaryCard(
+                title = "On Duty",
+                value = activeStaff.toString(),
                 icon = Icons.Default.CheckCircle,
-                color = ModernGreen
+                color = ReportsColor
             )
         }
         item {
-            StatCard(
-                title = "On Leave",
-                value = staffList.count { it.status == "On Leave" }.toString(),
-                icon = Icons.Default.EventBusy,
-                color = ModernOrange
+            SummaryCard(
+                title = "Avg. Rating",
+                value = String.format("%.1f", averageRating),
+                icon = Icons.Default.Star,
+                color = MenuColor
             )
         }
     }
 }
 
 @Composable
-fun StatCard(
+fun SummaryCard(
     title: String,
     value: String,
     icon: ImageVector,
     color: Color
 ) {
     Card(
-        modifier = Modifier
-            .width(140.dp)
-            .height(120.dp),
-        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.width(120.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = color.copy(alpha = 0.1f)
         ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 4.dp
-        )
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            color.copy(alpha = 0.15f),
-                            color.copy(alpha = 0.05f)
-                        )
-                    )
-                )
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp),
-            horizontalAlignment = Alignment.Start
+                .padding(16.dp)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            // Icon at the top
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = title,
                 tint = color,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(32.dp)
             )
-            
-            // Value and title at the bottom
-            Column(
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-                horizontalAlignment = Alignment.Start
-            ) {
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.Bold
+                ),
+                color = color
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RoleFilterChips(
+    selectedRole: StaffRole,
+    onRoleSelected: (StaffRole) -> Unit
+) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp)
+    ) {
+        items(StaffRole.values()) { role ->
+            val isSelected = selectedRole == role
+            FilterChip(
+                selected = isSelected,
+                onClick = { onRoleSelected(role) },
+                label = { Text(role.displayName) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = role.icon,
+                        contentDescription = role.displayName,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = StaffColor,
+                    selectedLabelColor = Color.White,
+                    selectedLeadingIconColor = Color.White
+                ),
+                border = FilterChipDefaults.filterChipBorder(
+                    borderColor = if (isSelected) StaffColor else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                    selectedBorderColor = StaffColor
                 )
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            )
         }
     }
 }
 
 @Composable
-fun StaffCard(staff: StaffMember) {
+fun StaffMemberCard(
+    staff: StaffMember,
+    modifier: Modifier = Modifier
+) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(
-                elevation = 6.dp,
-                shape = RoundedCornerShape(16.dp),
-                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-            ),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
-        Column(
+        Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
-                            MaterialTheme.colorScheme.surface
-                        )
+                .padding(16.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = staff.name,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold
                     )
                 )
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Avatar/Initial Circle with status color
-                    Card(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .shadow(
-                                elevation = 4.dp,
-                                shape = CircleShape,
-                                spotColor = when (staff.status) {
-                                    "Active" -> ModernGreen
-                                    "Off-duty" -> ModernOrange
-                                    else -> ModernRed
-                                }.copy(alpha = 0.15f)
-                            ),
-                        shape = CircleShape,
-                        colors = CardDefaults.cardColors(
-                            containerColor = when (staff.status) {
-                                "Active" -> ModernGreen
-                                "Off-duty" -> ModernOrange
-                                else -> ModernRed
-                            }.copy(alpha = 0.15f)
-                        )
-                    ) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = staff.name.first().toString(),
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Bold
-                                ),
-                                color = when (staff.status) {
-                                    "Active" -> ModernGreen
-                                    "Off-duty" -> ModernOrange
-                                    else -> ModernRed
-                                }
-                            )
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.width(16.dp))
-                    
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = staff.name,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = staff.role,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.padding(top = 4.dp)
-                        ) {
-                            Card(
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = when (staff.status) {
-                                        "Active" -> ModernGreen
-                                        "Off-duty" -> ModernOrange
-                                        else -> ModernRed
-                                    }.copy(alpha = 0.15f)
-                                )
-                            ) {
-                                Text(
-                                    text = staff.status,
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        fontWeight = FontWeight.Medium
-                                    ),
-                                    color = when (staff.status) {
-                                        "Active" -> ModernGreen
-                                        "Off-duty" -> ModernOrange
-                                        else -> ModernRed
-                                    },
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-                            Text(
-                                text = "•",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = staff.shift,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-                
-                IconButton(
-                    onClick = { /* TODO: Show staff details */ },
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
-                        .size(36.dp)
-                ) {
+                Text(
+                    text = staff.role.displayName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.ChevronRight,
-                        contentDescription = "View Details",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
+                        imageVector = Icons.Default.Circle,
+                        contentDescription = "Status",
+                        tint = staff.status.color,
+                        modifier = Modifier.size(8.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = staff.status.displayName,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = staff.status.color,
+                            fontWeight = FontWeight.Medium
+                        )
+                    )
+                }
+            }
+
+            Column(
+                horizontalAlignment = Alignment.End
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = "Rating",
+                        tint = MenuColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = staff.rating.toString(),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = MenuColor
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedButton(
+                    onClick = { /*TODO: View Profile*/ },
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, StaffColor.copy(alpha = 0.5f)),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        "Profile",
+                        style = MaterialTheme.typography.labelMedium
                     )
                 }
             }
