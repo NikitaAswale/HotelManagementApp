@@ -192,12 +192,13 @@ fun ProfileHeader() {
             .padding(vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Image(
-            painter = painterResource(id = R.drawable.ic_launcher_background), // Replace with actual profile image
-            contentDescription = "Profile Picture",
+        Icon(
+            imageVector = Icons.Default.AccountCircle,
+            contentDescription = "Profile",
             modifier = Modifier
                 .size(72.dp)
-                .clip(CircleShape)
+                .clip(CircleShape),
+            tint = MaterialTheme.colorScheme.primary
         )
         Spacer(modifier = Modifier.width(16.dp))
         Column {
