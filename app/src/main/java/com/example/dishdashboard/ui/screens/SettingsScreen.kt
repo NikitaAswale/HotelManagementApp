@@ -48,7 +48,8 @@ data class SettingItem(
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onNavigateToPaymentMethods: () -> Unit
 ) {
     var showLogoutDialog by remember { mutableStateOf(false) }
     var isVisible by remember { mutableStateOf(false) }
@@ -104,7 +105,7 @@ fun SettingsScreen(
                         items = listOf(
                             { SettingItem("Edit Profile", Icons.Default.Person) },
                             { SettingItem("Change Password", Icons.Default.Lock) },
-                            { SettingItem("Payment Methods", Icons.Default.CreditCard) }
+                            { SettingItem("Payment Methods", Icons.Default.CreditCard, onNavigateToPaymentMethods) }
                         ),
                         isVisible = isVisible,
                         delay = 200

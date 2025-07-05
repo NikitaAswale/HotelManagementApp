@@ -93,7 +93,14 @@ class MainActivity : ComponentActivity() {
                                     navController.navigate("login") {
                                         popUpTo("dashboard") { inclusive = true }
                                     }
-                                }
+                                },
+                                onNavigateToPaymentMethods = { navController.navigate("paymentMethods") }
+                            )
+                        }
+
+                        composable("paymentMethods") {
+                            PaymentMethodsScreen(
+                                onNavigateBack = { navController.navigateUp() }
                             )
                         }
                     }
