@@ -49,7 +49,8 @@ data class SettingItem(
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onLogout: () -> Unit,
-    onNavigateToPaymentMethods: () -> Unit
+    onNavigateToPaymentMethods: () -> Unit,
+    onNavigateToTaxesAndFees: () -> Unit
 ) {
     var showLogoutDialog by remember { mutableStateOf(false) }
     var isVisible by remember { mutableStateOf(false) }
@@ -119,7 +120,7 @@ fun SettingsScreen(
                         items = listOf(
                             { SettingItem("Restaurant Profile", Icons.Default.Restaurant) },
                             { SettingItem("Business Hours", Icons.Default.Schedule) },
-                            { SettingItem("Taxes & Fees", Icons.Default.Receipt) }
+                            { SettingItem("Taxes & Fees", Icons.Default.Receipt, onNavigateToTaxesAndFees) }
                         ),
                         isVisible = isVisible,
                         delay = 400

@@ -94,12 +94,19 @@ class MainActivity : ComponentActivity() {
                                         popUpTo("dashboard") { inclusive = true }
                                     }
                                 },
-                                onNavigateToPaymentMethods = { navController.navigate("paymentMethods") }
+                                onNavigateToPaymentMethods = { navController.navigate("paymentMethods") },
+                                onNavigateToTaxesAndFees = { navController.navigate("taxesAndFees") }
                             )
                         }
 
                         composable("paymentMethods") {
                             PaymentMethodsScreen(
+                                onNavigateBack = { navController.navigateUp() }
+                            )
+                        }
+
+                        composable("taxesAndFees") {
+                            TaxesAndFeesScreen(
                                 onNavigateBack = { navController.navigateUp() }
                             )
                         }
